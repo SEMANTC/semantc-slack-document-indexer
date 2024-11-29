@@ -3,6 +3,7 @@
 from google.cloud import firestore
 from typing import Optional, Dict, Any
 from datetime import datetime
+from ..models.metadata import DocumentMetadata
 
 class MetadataStore:
     """HANDLES DOCUMENT METADATA STORAGE IN FIRESTORE"""
@@ -26,13 +27,15 @@ class MetadataStore:
             'processing': {
                 'status': metadata.status,
                 'chunk_count': metadata.chunk_count,
-                'last_processed': firestore.SERVER_TIMESTAMP
+                'last_processed': firestore.SERVER_TIMESTAMP,
+                'error': metadata.error
             }
         })
         return metadata.document_id
     
     async def update_status(self, doc_id: str, status: str, 
-                          chunk_count: Optional[int] = None) -> None:
+                          chunk_count: Optional[int] = None,
+                          error: Optional[str] = None) -> None:
         """UPDATES PROCESSING STATUS AND CHUNK COUNT"""
         doc_ref = self.collection.document(doc_id)
         update_data = {
@@ -41,6 +44,8 @@ class MetadataStore:
         }
         if chunk_count is not None:
             update_data['processing.chunk_count'] = chunk_count
+        if error is not None:
+            update_data['processing.error'] = error
         
         doc_ref.update(update_data)
     

@@ -37,7 +37,7 @@ class Settings(BaseSettings):
 @lru_cache()
 def get_settings() -> Settings:
     """
-    creates and caches settings instance.
-    returns the same instance for subsequent calls.
+    CREATES AND CACHES SETTINGS INSTANCE
+    RETURNS THE SAME INSTANCE FOR SUBSEQUENT CALLS
     """
     return Settings()

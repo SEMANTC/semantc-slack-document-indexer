@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  document-indexer:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./credentials:/app/credentials
+    env_file:
+      - .env
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials/google-credentials.json
