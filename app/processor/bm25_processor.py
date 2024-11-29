@@ -1,7 +1,6 @@
 # app/processor/bm25_processor.py
-
 from rank_bm25 import BM25Okapi
-from typing import List, Dict
+from typing import List, Dict, Any
 import numpy as np
 
 class BM25Processor:

@@ -1,6 +1,6 @@
 # app/processor/document_processor.py
 
-from langchain.document_loaders import GoogleDriveLoader
+from langchain_google_community import GoogleDriveLoader
 from langchain.docstore.document import Document
 from typing import List, Optional
 from datetime import datetime

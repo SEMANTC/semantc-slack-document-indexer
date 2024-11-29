@@ -1,6 +1,6 @@
 # app/processor/context_generator.py
 
-from langchain.chat_models import ChatAnthropic
+from langchain_anthropic import ChatAnthropic
 
 class ContextGenerator:
     def __init__(self):

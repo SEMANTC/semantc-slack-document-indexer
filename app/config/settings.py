@@ -4,40 +4,35 @@ from pydantic_settings import BaseSettings
 from functools import lru_cache
 
 class Settings(BaseSettings):
-    """
-    APPLICATION SETTINGS. THESE ARE LOADED FROM ENVIRONMENT VARIABLES
-    USES PYDANTIC FOR VALIDATION AND TYPE CHECKING
-    """
-    # google cloud settings
+    """Application settings"""
+    # Google Cloud Settings
     PROJECT_ID: str
     REGION: str = "us-central1"
-    
-    # google drive settings
+    GOOGLE_APPLICATION_CREDENTIALS: str
+
+    # Google Drive Settings
     DRIVE_FOLDER_ID: str
-    
-    # vector db settings (pinecone)
+
+    # OpenAI Settings
+    OPENAI_API_KEY: str
+
+    # Anthropic Settings
+    ANTHROPIC_API_KEY: str
+
+    # Vector DB Settings (Pinecone)
     PINECONE_API_KEY: str
     PINECONE_ENVIRONMENT: str
     PINECONE_INDEX_NAME: str
-    
-    # openai settings
-    OPENAI_API_KEY: str
 
-    # claude ai settings
-    ANTHROPIC_API_KEY: str
-    
-    # processing settings
-    CHUNK_SIZE: int = 800
-    CHUNK_OVERLAP: int = 100
-    MAX_CHUNKS_PER_DOC: int = 100
+    # Application Settings
+    APP_PORT: int = 8080
+    CHUNK_SIZE: int = 1000
+    CHUNK_OVERLAP: int = 200
 
     class Config:
         env_file = ".env"
+        case_sensitive = True
 
 @lru_cache()
-def get_settings() -> Settings:
-    """
-    CREATES AND CACHES SETTINGS INSTANCE
-    RETURNS THE SAME INSTANCE FOR SUBSEQUENT CALLS
-    """
+def get_settings():
     return Settings()

@@ -1,6 +1,6 @@
 # app/database/vector_store.py
 
-from langchain.vectorstores import Pinecone
+from langchain_community.vectorstores import Pinecone
 from .embeddings import get_embeddings
 import pinecone
 

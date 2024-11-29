@@ -1,0 +1,15 @@
+docker build -t document-indexer .
+
+docker run -p 8080:8080 \
+  --env-file .env \
+  -v $(pwd)/credentials:/app/credentials \
+  document-indexer
+
+
+docker-compose up --build
+
+
+
+curl -X POST http://localhost:8080/process \
+  -H "Content-Type: application/json" \
+  -d '{"file_id": "17ZV5tLjYVU5s1jUSnncgc-2ToYCyCjtb"}'
