@@ -1,0 +1,9 @@
+# requirements.txt
+langchain==0.0.350
+langchain-openai==0.0.2  # For OpenAI embeddings
+python-dotenv==1.0.0
+fastapi==0.104.1
+uvicorn==0.24.0
+google-cloud-storage==2.14.0
+google-cloud-firestore==2.13.1
+pinecone-client==2.2.4  # For vector storage
