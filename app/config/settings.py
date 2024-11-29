@@ -21,7 +21,7 @@ class Settings(BaseSettings):
 
     # Vector DB Settings (Pinecone)
     PINECONE_API_KEY: str
-    PINECONE_ENVIRONMENT: str
+    PINECONE_ENVIRONMENT: str = "us-east-1"
     PINECONE_INDEX_NAME: str
 
     # Application Settings
