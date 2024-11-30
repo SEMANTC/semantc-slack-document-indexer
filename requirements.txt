@@ -4,6 +4,9 @@ langchain
 langchain-openai
 langchain-anthropic
 langchain-community
+# langchain-google-community
+langchain-google-community[drive]
+langchain-pinecone
 python-dotenv
 google-cloud-storage
 google-cloud-firestore
@@ -12,4 +15,6 @@ pinecone-client
 pydantic
 pydantic-settings
 rank-bm25
-langchain-google-community
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib

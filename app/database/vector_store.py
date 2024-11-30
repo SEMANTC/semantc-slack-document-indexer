@@ -1,6 +1,6 @@
 # app/database/vector_store.py
 
-from langchain_community.vectorstores import Pinecone
+from langchain_pinecone import PineconeVectorStore  # Updated import
 from langchain_openai import OpenAIEmbeddings
 from pinecone import Pinecone as PineconeClient, ServerlessSpec
 from ..utils.logger import setup_logger
@@ -25,7 +25,7 @@ class VectorStore:
         self.index = self.setup_pinecone_index()
         
         # Initialize vector store
-        self.vector_store = Pinecone(
+        self.vector_store = PineconeVectorStore(  # Updated class
             index=self.index,
             embedding=self.embeddings,
             text_key="text",

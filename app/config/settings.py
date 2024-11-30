@@ -10,14 +10,14 @@ class Settings(BaseSettings):
     REGION: str = "us-central1"
     GOOGLE_APPLICATION_CREDENTIALS: str
 
-    # Google Drive Settings
-    DRIVE_FOLDER_ID: str
+    # # Google Drive Settings
+    # DRIVE_FOLDER_ID: str
 
-    # OpenAI Settings
-    OPENAI_API_KEY: str
+    # # OpenAI Settings
+    # OPENAI_API_KEY: str
 
-    # Anthropic Settings
-    ANTHROPIC_API_KEY: str
+    # # Anthropic Settings
+    # ANTHROPIC_API_KEY: str
 
     # Vector DB Settings (Pinecone)
     PINECONE_API_KEY: str

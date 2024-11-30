@@ -34,7 +34,8 @@ document_processor = DocumentProcessor(
     vector_store=vector_store,
     metadata_store=metadata_store,
     context_generator=context_generator,
-    chunk_processor=chunk_processor
+    chunk_processor=chunk_processor,
+    settings=settings  # Add settings
 )
 
 # request models
@@ -64,7 +65,7 @@ async def process_document(request: ProcessDocumentRequest, background_tasks: Ba
         document_id: id of the processed document for status tracking
     """
     try:
-        # Start processing in background
+        # start processing in background
         doc_id = await document_processor.process_file(file_id=request.file_id)
         return ProcessResponse(document_id=doc_id)
         

@@ -1,16 +1,17 @@
 # app/processor/document_processor.py
-
 from langchain_google_community import GoogleDriveLoader
-from langchain.docstore.document import Document
 from typing import List, Optional
 from datetime import datetime
+from langchain.docstore.document import Document
 import uuid
 import os
+
 from .chunk_processor import ChunkProcessor
 from .context_generator import ContextGenerator
 from ..database.vector_store import VectorStore
 from ..database.metadata_store import MetadataStore
 from ..models.metadata import DocumentMetadata
+from ..config.settings import Settings
 
 class DocumentProcessor:
     def __init__(
@@ -18,25 +19,34 @@ class DocumentProcessor:
         vector_store: VectorStore,
         metadata_store: MetadataStore,
         context_generator: ContextGenerator,
-        chunk_processor: ChunkProcessor
+        chunk_processor: ChunkProcessor,
+        settings: Settings
     ):
         self.vector_store = vector_store
         self.metadata_store = metadata_store
         self.context_generator = context_generator
         self.chunk_processor = chunk_processor
-        self.loader = GoogleDriveLoader()
+        
+        # Initialize Google Drive loader with service account
+        self.loader = GoogleDriveLoader(
+            folder_id=settings.DRIVE_FOLDER_ID,
+            credentials_path=settings.GOOGLE_APPLICATION_CREDENTIALS,
+            service_account_key=settings.GOOGLE_APPLICATION_CREDENTIALS,  # Add this line
+            recursive=False,
+            file_ids=[]
+        )
 
-    async def process_file(self, file_id: str, file_path: str) -> str:
-        """PROCESS A SINGLE FILE"""
+    async def process_file(self, file_id: str) -> str:
+        """Process a single file"""
         metadata = None
         try:
-            # create metadata entry
+            # Create metadata entry
             metadata = DocumentMetadata(
                 document_id=str(uuid.uuid4()),
-                original_file_name=os.path.basename(file_path),
+                original_file_name=file_id,
                 drive_id=file_id,
-                drive_path=file_path,
-                file_size=0,  # will be updated when file is loaded
+                drive_path="",
+                file_size=0,
                 created_at=datetime.utcnow(),
                 modified_at=datetime.utcnow(),
                 status="processing"
@@ -44,41 +54,47 @@ class DocumentProcessor:
             
             doc_id = await self.metadata_store.create(metadata)
 
-            # load document
-            document = self.loader.load(file_path)
+            # Load document
+            self.loader.file_ids = [file_id]  # Set file ID to process
+            documents = self.loader.load()
+            
+            if not documents:
+                raise Exception(f"No document found with ID: {file_id}")
+            
+            document = documents[0]
 
-            # update file size in metadata if available
-            if hasattr(document, 'metadata') and 'file_size' in document.metadata:
+            # Update metadata with actual file name if available
+            if hasattr(document, 'metadata'):
                 await self.metadata_store.update_status(
                     doc_id=doc_id,
                     status="processing",
-                    file_size=document.metadata['file_size']
+                    file_name=document.metadata.get('source', ''),
+                    file_size=document.metadata.get('size', 0)
                 )
 
-            # get full document content for context
+            # Get full document content for context
             full_content = self.chunk_processor.get_document_text(document)
 
-            # split into chunks
+            # Split into chunks
             chunks = await self.chunk_processor.split_document(document)
 
-            # generate context and store chunks
+            # Generate context and store chunks
             processed_chunks = []
             for i, chunk in enumerate(chunks):
                 try:
-                    # generate context
+                    # Generate context
                     context = await self.context_generator.generate_context(
                         document_content=full_content,
                         chunk_content=chunk.page_content
                     )
                     
-                    # combine context with chunk
+                    # Combine context with chunk
                     contextualized_chunk = Document(
                         page_content=f"{context}\n\n{chunk.page_content}",
                         metadata={
                             **chunk.metadata,
                             "document_id": doc_id,
                             "drive_id": file_id,
-                            "file_path": file_path,
                             "context_generated": True,
                             "chunk_index": i,
                             "total_chunks": len(chunks),
@@ -88,17 +104,16 @@ class DocumentProcessor:
                     processed_chunks.append(contextualized_chunk)
                 
                 except Exception as chunk_error:
-                    # log chunk processing error but continue with others
-                    print(f"error processing chunk {i}: {str(chunk_error)}")
+                    print(f"Error processing chunk {i}: {str(chunk_error)}")
                     continue
 
             if not processed_chunks:
-                raise Exception("no chunks were successfully processed")
+                raise Exception("No chunks were successfully processed")
 
-            # store in vector database
+            # Store in vector database
             await self.vector_store.add_documents(processed_chunks)
 
-            # update metadata with success status
+            # Update metadata with success status
             await self.metadata_store.update_status(
                 doc_id=doc_id,
                 status="completed",
@@ -108,33 +123,15 @@ class DocumentProcessor:
             return doc_id
 
         except Exception as e:
-            # update metadata with error status
+            # Update metadata with error status
             if metadata and metadata.document_id:
                 await self.metadata_store.update_status(
                     doc_id=metadata.document_id,
                     status="failed",
                     error=str(e)
                 )
-            raise Exception(f"document processing failed: {str(e)}")
-
-    async def reprocess_failed_chunks(self, doc_id: str) -> bool:
-        """REPROCESS FAILED CHUNKS FOR A DOCUMENT"""
-        try:
-            metadata = await self.metadata_store.get_document(doc_id)
-            if not metadata or metadata['processing']['status'] != 'failed':
-                return False
-
-            # Attempt to reprocess
-            await self.process_file(
-                file_id=metadata['original_file']['drive_id'],
-                file_path=metadata['original_file']['path']
-            )
-            return True
-
-        except Exception as e:
-            print(f"error reprocessing document {doc_id}: {str(e)}")
-            return False
+            raise Exception(f"Document processing failed: {str(e)}")
 
     async def get_processing_status(self, doc_id: str) -> dict:
-        """GET CURRENT PROCESSING STATUS OF A DOCUMENT"""
+        """Get current processing status of a document"""
         return await self.metadata_store.get_document(doc_id)
