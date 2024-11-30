@@ -1,4 +1,5 @@
 # app/processor/document_processor.py
+
 from langchain_google_community import GoogleDriveLoader
 from typing import List, Optional, Dict
 from datetime import datetime
@@ -28,23 +29,23 @@ class DocumentProcessor:
         self.context_generator = context_generator
         self.chunk_processor = chunk_processor
         self.settings = settings
-        self.loader = None
 
-    def _initialize_loader(self, credentials: Dict):
-        """Initialize loader with OAuth credentials"""
-        creds = Credentials.from_authorized_user_info(credentials)
-        self.loader = GoogleDriveLoader(
-            credentials=creds,
-            file_ids=[],
-            recursive=False
-        )
+    def _initialize_loader(self, credentials: Dict, file_id: str) -> GoogleDriveLoader:
+        """Initialize loader with OAuth credentials and file ID"""
+        try:
+            creds = Credentials.from_authorized_user_info(credentials)
+            return GoogleDriveLoader(
+                credentials=creds,
+                file_ids=[file_id],
+                recursive=False
+            )
+        except Exception as e:
+            raise Exception(f"Failed to initialize loader: {str(e)}")
 
     async def process_file(self, file_id: str, credentials: Dict) -> str:
         """Process a single file"""
         metadata = None
         try:
-            self._initialize_loader(credentials)
-            
             # Create metadata entry
             metadata = DocumentMetadata(
                 document_id=str(uuid.uuid4()),
@@ -59,9 +60,9 @@ class DocumentProcessor:
             
             doc_id = await self.metadata_store.create(metadata)
 
-            # Load document
-            self.loader.file_ids = [file_id]
-            documents = self.loader.load()
+            # Initialize loader and load document
+            loader = self._initialize_loader(credentials, file_id)
+            documents = loader.load()
             
             if not documents:
                 raise Exception(f"No document found with ID: {file_id}")
