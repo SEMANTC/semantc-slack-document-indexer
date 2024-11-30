@@ -1,8 +1,10 @@
 # app/main.py
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, Request
+
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from typing import Optional, Dict
+import logging
 
 from .processor.document_processor import DocumentProcessor
 from .database.vector_store import VectorStore
@@ -13,7 +15,10 @@ from .config.settings import get_settings
 from .auth.google_auth import GoogleDriveAuth
 from .auth.token_storage import TokenStorage
 from .models.auth import TokenData, UserAuth
-from .models.drive import DriveFile, DriveFolder
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -70,8 +75,13 @@ class StatusResponse(BaseModel):
 @app.get("/auth/google")
 async def google_auth_start():
     """Start Google OAuth flow"""
-    auth_url = google_auth.get_authorization_url()
-    return RedirectResponse(auth_url)
+    try:
+        auth_url = google_auth.get_authorization_url()
+        logger.info(f"Generated auth URL: {auth_url}")
+        return RedirectResponse(url=auth_url)
+    except Exception as e:
+        logger.error(f"Auth Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Authorization error: {str(e)}")
 
 @app.get("/auth/google/callback")
 async def google_auth_callback(code: str, state: Optional[str] = None):
@@ -79,57 +89,38 @@ async def google_auth_callback(code: str, state: Optional[str] = None):
     try:
         credentials = google_auth.get_credentials(code)
         # In a real app, you'd get the user_id from the session/token
-        user_id = "test_user"  # This should come from your auth system
+        user_id = "test_user"
         await token_storage.save_token(user_id, credentials)
+        logger.info(f"Successfully saved credentials for user: {user_id}")
         return {"status": "success", "user_id": user_id}
     except Exception as e:
+        logger.error(f"Callback Error: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
-
-# Helper function to get user credentials
-async def get_user_credentials(user_id: str) -> Dict:
-    credentials = await token_storage.get_token(user_id)
-    if not credentials:
-        raise HTTPException(status_code=401, detail="User not authenticated")
-    return credentials
 
 # Document Processing Endpoints
 @app.post("/process", response_model=ProcessResponse)
-async def process_document(
-    request: ProcessDocumentRequest,
-    background_tasks: BackgroundTasks
-):
-    """
-    Process a document from Google Drive
-    
-    Args:
-        file_id: Google Drive file ID
-        user_id: User identifier
-        
-    Returns:
-        document_id: ID of the processed document for status tracking
-    """
+async def process_document(request: ProcessDocumentRequest):
+    """Process a document from Google Drive"""
     try:
-        credentials = await get_user_credentials(request.user_id)
+        # Get user credentials
+        credentials = await token_storage.get_token(request.user_id)
+        if not credentials:
+            raise HTTPException(status_code=401, detail="User not authenticated")
+
         doc_id = await document_processor.process_file(
             file_id=request.file_id,
             credentials=credentials
         )
+        logger.info(f"Started processing document: {doc_id}")
         return ProcessResponse(document_id=doc_id)
         
     except Exception as e:
+        logger.error(f"Processing Error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/status/{doc_id}", response_model=StatusResponse)
 async def get_status(doc_id: str):
-    """
-    Get document processing status
-    
-    Args:
-        doc_id: Document ID returned from process endpoint
-        
-    Returns:
-        Status information about the document processing
-    """
+    """Get document processing status"""
     try:
         status = await metadata_store.get_document(doc_id)
         if not status:
@@ -140,6 +131,7 @@ async def get_status(doc_id: str):
         return StatusResponse(**status)
         
     except Exception as e:
+        logger.error(f"Status Error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # Health check endpoint
@@ -147,3 +139,9 @@ async def get_status(doc_id: str):
 async def health_check():
     """Health check endpoint"""
     return {"status": "healthy"}
+
+# Error handler
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Global error: {str(exc)}")
+    return {"error": str(exc)}, 500
