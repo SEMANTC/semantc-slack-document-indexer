@@ -43,7 +43,7 @@ class VectorStore:
                 logger.info(f"Creating new Pinecone index: {self.settings.PINECONE_INDEX_NAME}")
                 self.pc.create_index(
                     name=self.settings.PINECONE_INDEX_NAME,
-                    dimension=1536,  # OpenAI embeddings dimension
+                    dimension=3072,  # openai embeddings dimension
                     metric="cosine",
                     spec=ServerlessSpec(
                         cloud="aws",

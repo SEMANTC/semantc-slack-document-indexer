@@ -5,7 +5,7 @@ from langchain_anthropic import ChatAnthropic
 class ContextGenerator:
     def __init__(self):
         self.llm = ChatAnthropic(
-            model="claude-3-sonnet-20240307",
+            model="claude-3-5-sonnet-latest",
             temperature=0,
         )
         self.context_prompt = """
