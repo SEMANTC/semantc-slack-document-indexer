@@ -1,26 +1,31 @@
 # app/main.py
-
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, Request
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Dict
+
 from .processor.document_processor import DocumentProcessor
 from .database.vector_store import VectorStore
 from .database.metadata_store import MetadataStore
 from .processor.context_generator import ContextGenerator
 from .processor.chunk_processor import ChunkProcessor
 from .config.settings import get_settings
+from .auth.google_auth import GoogleDriveAuth
+from .auth.token_storage import TokenStorage
+from .models.auth import TokenData, UserAuth
+from .models.drive import DriveFile, DriveFolder
 
-# initialize fastapi app
+# Initialize FastAPI app
 app = FastAPI(
-    title="DOCUMENT INDEXER SERVICE",
-    description="service for processing and indexing documents from Google Drive",
+    title="Document Indexer Service",
+    description="Service for processing and indexing documents from Google Drive",
     version="1.0.0"
 )
 
-# load settings
+# Load settings
 settings = get_settings()
 
-# initialize components
+# Initialize components
 vector_store = VectorStore(settings)
 metadata_store = MetadataStore(settings.PROJECT_ID)
 context_generator = ContextGenerator()
@@ -29,18 +34,27 @@ chunk_processor = ChunkProcessor(
     chunk_overlap=settings.CHUNK_OVERLAP
 )
 
-# initialize document processor
+# Initialize auth components
+google_auth = GoogleDriveAuth(
+    client_id=settings.GOOGLE_CLIENT_ID,
+    client_secret=settings.GOOGLE_CLIENT_SECRET,
+    redirect_uri=settings.OAUTH_REDIRECT_URI
+)
+token_storage = TokenStorage(settings.PROJECT_ID)
+
+# Initialize document processor
 document_processor = DocumentProcessor(
     vector_store=vector_store,
     metadata_store=metadata_store,
     context_generator=context_generator,
     chunk_processor=chunk_processor,
-    settings=settings  # Add settings
+    settings=settings
 )
 
-# request models
+# Request/Response Models
 class ProcessDocumentRequest(BaseModel):
     file_id: str
+    user_id: str
     
 class ProcessResponse(BaseModel):
     document_id: str
@@ -52,21 +66,54 @@ class StatusResponse(BaseModel):
     chunk_count: Optional[int] = None
     error: Optional[str] = None
 
-# endpoints
+# Auth Endpoints
+@app.get("/auth/google")
+async def google_auth_start():
+    """Start Google OAuth flow"""
+    auth_url = google_auth.get_authorization_url()
+    return RedirectResponse(auth_url)
+
+@app.get("/auth/google/callback")
+async def google_auth_callback(code: str, state: Optional[str] = None):
+    """Handle OAuth callback"""
+    try:
+        credentials = google_auth.get_credentials(code)
+        # In a real app, you'd get the user_id from the session/token
+        user_id = "test_user"  # This should come from your auth system
+        await token_storage.save_token(user_id, credentials)
+        return {"status": "success", "user_id": user_id}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+# Helper function to get user credentials
+async def get_user_credentials(user_id: str) -> Dict:
+    credentials = await token_storage.get_token(user_id)
+    if not credentials:
+        raise HTTPException(status_code=401, detail="User not authenticated")
+    return credentials
+
+# Document Processing Endpoints
 @app.post("/process", response_model=ProcessResponse)
-async def process_document(request: ProcessDocumentRequest, background_tasks: BackgroundTasks):
+async def process_document(
+    request: ProcessDocumentRequest,
+    background_tasks: BackgroundTasks
+):
     """
-    PROCESS A DOCUMENT FROM GOOGLE DRIVE
+    Process a document from Google Drive
     
-    args:
-        file_id: google drive file id
+    Args:
+        file_id: Google Drive file ID
+        user_id: User identifier
         
-    returns:
-        document_id: id of the processed document for status tracking
+    Returns:
+        document_id: ID of the processed document for status tracking
     """
     try:
-        # start processing in background
-        doc_id = await document_processor.process_file(file_id=request.file_id)
+        credentials = await get_user_credentials(request.user_id)
+        doc_id = await document_processor.process_file(
+            file_id=request.file_id,
+            credentials=credentials
+        )
         return ProcessResponse(document_id=doc_id)
         
     except Exception as e:
@@ -75,13 +122,13 @@ async def process_document(request: ProcessDocumentRequest, background_tasks: Ba
 @app.get("/status/{doc_id}", response_model=StatusResponse)
 async def get_status(doc_id: str):
     """
-    GET DOCUMENT PROCESSING STATUS
+    Get document processing status
     
-    args:
-        doc_id: document id returned from process endpoint
+    Args:
+        doc_id: Document ID returned from process endpoint
         
-    returns:
-        status information about the document processing
+    Returns:
+        Status information about the document processing
     """
     try:
         status = await metadata_store.get_document(doc_id)
@@ -95,15 +142,8 @@ async def get_status(doc_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# health check endpoint
+# Health check endpoint
 @app.get("/health")
 async def health_check():
-    """
-    HEALTH CHECK ENDPOINT
-    """
+    """Health check endpoint"""
     return {"status": "healthy"}
-
-# error handlers
-@app.exception_handler(Exception)
-async def general_exception_handler(request, exc):
-    return {"error": str(exc)}, 500

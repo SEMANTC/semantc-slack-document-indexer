@@ -1,8 +1,9 @@
 # app/processor/document_processor.py
 from langchain_google_community import GoogleDriveLoader
-from typing import List, Optional
+from typing import List, Optional, Dict
 from datetime import datetime
 from langchain.docstore.document import Document
+from google.oauth2.credentials import Credentials
 import uuid
 import os
 
@@ -26,20 +27,24 @@ class DocumentProcessor:
         self.metadata_store = metadata_store
         self.context_generator = context_generator
         self.chunk_processor = chunk_processor
-        
-        # Initialize Google Drive loader with service account
+        self.settings = settings
+        self.loader = None
+
+    def _initialize_loader(self, credentials: Dict):
+        """Initialize loader with OAuth credentials"""
+        creds = Credentials.from_authorized_user_info(credentials)
         self.loader = GoogleDriveLoader(
-            folder_id=settings.DRIVE_FOLDER_ID,
-            credentials_path=settings.GOOGLE_APPLICATION_CREDENTIALS,
-            service_account_key=settings.GOOGLE_APPLICATION_CREDENTIALS,  # Add this line
-            recursive=False,
-            file_ids=[]
+            credentials=creds,
+            file_ids=[],
+            recursive=False
         )
 
-    async def process_file(self, file_id: str) -> str:
+    async def process_file(self, file_id: str, credentials: Dict) -> str:
         """Process a single file"""
         metadata = None
         try:
+            self._initialize_loader(credentials)
+            
             # Create metadata entry
             metadata = DocumentMetadata(
                 document_id=str(uuid.uuid4()),
@@ -55,7 +60,7 @@ class DocumentProcessor:
             doc_id = await self.metadata_store.create(metadata)
 
             # Load document
-            self.loader.file_ids = [file_id]  # Set file ID to process
+            self.loader.file_ids = [file_id]
             documents = self.loader.load()
             
             if not documents:

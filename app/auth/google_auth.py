@@ -53,23 +53,3 @@ class GoogleDriveAuth:
             'client_secret': credentials.client_secret,
             'scopes': credentials.scopes
         }
-
-    @staticmethod
-    def credentials_from_dict(creds_dict: Dict) -> Credentials:
-        """Create credentials object from dictionary"""
-        return Credentials.from_authorized_user_info(creds_dict)
-
-    @staticmethod
-    def refresh_credentials(credentials: Credentials) -> Optional[Dict]:
-        """Refresh credentials if expired"""
-        if credentials and credentials.expired and credentials.refresh_token:
-            credentials.refresh(Request())
-            return {
-                'token': credentials.token,
-                'refresh_token': credentials.refresh_token,
-                'token_uri': credentials.token_uri,
-                'client_id': credentials.client_id,
-                'client_secret': credentials.client_secret,
-                'scopes': credentials.scopes
-            }
-        return None
